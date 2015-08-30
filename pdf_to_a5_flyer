@@ -1,0 +1,32 @@
+#!/bin/bash
+# example parsing of command lines
+
+function usage {
+  echo "Usage: $0 [-h] [-s size] in.pdf out.pdf";
+  echo ""
+  echo "Scales the PDF to a5 (portrait)";
+  exit $1;
+}
+other_args=();
+# Default options go here:
+DEST_SIZE="a5"
+# an option followed by : means "takes an argument", set in $OPTARG
+while getopts "hs:" opt; do
+  case $opt in
+    h )   usage 0 ;;
+    s )   DEST_SIZE=$OPTARG;;
+    \? )  usage 1 ;;
+  esac
+done
+# Now remove all options (and their args) from the positional parameters
+# So we can process any additional non-option args, which MUST come after
+# options.
+shift $((OPTIND-1))
+INFILE="$1"
+OUTFILE="$2"
+
+[ -n "$INFILE" ] || { echo "Missing input filename" >&2 ; usage 1; }
+[ -f "$INFILE" ] || { echo "Input '$INFILE' does not exist" >&2 ; usage 1; }
+[ -n "$OUTFILE" ] || { echo "Missing output filename" >&2 ; usage 1; }
+
+gs -sDEVICE=pdfwrite -sPAPERSIZE=$DEST_SIZE -dFIXEDMEDIA -dPDFFitPage -dCompatibilityLevel=1.4 -o "$OUTFILE" "$INFILE"
