@@ -1,0 +1,125 @@
+#!/usr/bin/perl -w
+use strict;
+use Getopt::Long;
+use Pod::Usage;
+use Data::Dumper; 
+
+die('sam2p required. sudo apt-get install sam2p') if system("which sam2p >/dev/null");
+die('convert required. sudo apt-get install imagemagick') if system("which convert >/dev/null");
+die('pdftk required. sudo apt-get install pdftk') if system("which pdftk >/dev/null");
+die('ps2pdf required. sudo apt-get install ghostscript') if system("which ps2pdf >/dev/null");
+
+# See http://perldoc.perl.org/Getopt/Long.html
+# can set default options like this:
+my %opts = (
+		'bw'        => 0,      
+		'threshold' => '80%',  
+		'help'      => 0,
+		'quality'   => 'default',
+		'outfile'   => ''
+		);
+
+GetOptions (\%opts, 'bw!','threshold=s','help','quality=s' );
+pod2usage(1) if ($opts{'help'});
+
+# validate options and throw help back if the dear user has clearly misunderstood
+
+# expect at least two files
+pod2usage(1) if ( $#ARGV <1 );
+
+# first thing is outfile
+$opts{'outfile'} = shift @ARGV ;
+
+# outfile must end .pdf
+die("Outfile must end .pdf\n") unless ( $opts{'outfile'} =~ m/.pdf$/ ) ;
+
+# outfile must not exist
+die("$opts{outfile} exists. I won't overwrite it.\n") if ( -e $opts{'outfile'} ) ;
+
+# collect input files, check they exist.
+my (@inputs) = @ARGV;
+foreach (@inputs)
+{ die( "$_ does not exist\n" ) if ( ! -e $_ ); }
+
+# create 1-bit versions if needed
+if ($opts{bw})
+{
+	print "Converting to 1 bit pngs with convert...\n";
+	foreach (@inputs)
+	{
+		print "$_ ... ";
+		system("convert",
+			$_,
+			'-threshold',$opts{threshold},
+			'-monochrome',
+			'_' . $_ . '.png') ;
+
+		# prepend _ and append .png to filename in @inputs
+		s/^(.+)$/_$1.png/;
+	}
+	print "done\n";
+}
+
+
+print "Generating optimised postscript, then pdf with sam2p...\n";
+foreach (@inputs)
+{
+	print "Doing $_ ..."; 
+	system("sam2p",'-j:quiet',
+		'-e:dpi:300',
+		'-e:scale', 
+		$_, $_ . '.ps') ;
+	print "...";
+	system("ps2pdf14", '-sPAPERSIZE=a4', "-dPDFSETTINGS=/$opts{quality}", $_ . '.ps', $_ . '.pdf');
+	print "done\n";
+}
+
+print "Combining PDF pages...";
+my @cmd = qw|pdftk|;
+push @cmd, $_ . '.pdf' foreach(@inputs);
+system(@cmd,'cat','output', $opts{outfile});
+print "done\n";
+
+# tidy up
+unlink $_ . '.pdf' foreach (@inputs);
+unlink $_ . '.ps' foreach (@inputs);
+unlink (@inputs) if ($opts{bw});
+
+system('ls', '-lh', $opts{outfile} );
+
+
+__END__
+
+=head1 NAME
+
+raster2pdf.pl
+
+=head1 SYNOPSIS
+
+raster2pdf.pl [options] outfile.pdf infile.jpg [infile.jpg ... ]
+
+=head1 OPTIONS
+
+=over 8
+
+=item B<-quality> default|prepress|printer|ebook|screen
+
+PDF setting.
+
+=item B<-bw>
+
+Convert the images to one-bit black and white. e.g. for scanned text documents.
+
+=item B<-threshold>
+
+In conjunction with -bw, threshold for conversion. Defaults to 50%. 
+80% would be darker.
+
+=back
+
+=head1 DESCRIPTION
+
+Creates A4 PDF from one or more raster image inputs maximising each image on each page.
+
+=cut
+
