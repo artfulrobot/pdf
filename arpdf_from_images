@@ -92,11 +92,11 @@ __END__
 
 =head1 NAME
 
-raster2pdf.pl
+arpdf_from_images
 
 =head1 SYNOPSIS
 
-raster2pdf.pl [options] outfile.pdf infile.jpg [infile.jpg ... ]
+arpdf_from_images [options] outfile.pdf infile.jpg [infile.jpg ... ]
 
 =head1 OPTIONS
 

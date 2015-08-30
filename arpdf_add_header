@@ -121,11 +121,11 @@ __END__
 
 =head1 NAME
 
-pdf_add_header.pl
+arpdf_add_header
 
 =head1 SYNOPSIS
 
-pdf_add_header.pl --header 'this is page %n of %N pages' --footer 'by me.' [opts] file.pdf
+arpdf_add_header --header 'this is page %n of %N pages' --footer 'by me.' [opts] file.pdf
 
 =head1 OPTIONS
 
@@ -151,8 +151,7 @@ write output to FILE. Default is to write it to original filename with _ prepend
 
 =head1 DESCRIPTION
 
-B<This program> will read the given input file(s) and do something
-useful with the contents thereof.
+B<arpdf_add_header> adds a header and/or footer to every page in the PDF.
 
 =cut
 
