@@ -43,7 +43,7 @@ shift $((OPTIND-1))
 INFILE="$1"
 OUTFILE="$2"
 [ -e "$INFILE" ] || { echo "Missing or unreadable input filename" >&2; usage 1; }
-[ -e "$OUTFILE" ] || { echo "Missing or unreadable output filename" >&2; usage 1; }
+[ -e "$OUTFILE" ] && { echo "Output filename exists. Delete it if you want to replace it." >&2; usage 1; }
 
 case "$METHOD" in
   poster )
@@ -56,7 +56,7 @@ case "$METHOD" in
       echo "Missing required packages: $REQUIRED_MISSING" >&2
       exit 1
     fi
-    pdftops -eps "$INFILE" - | poster -p2x1A4  | ps2pdf - "$OUTFILE" 
+    pdftops -eps "$INFILE" - | poster -p$DEST_SIZE  | ps2pdf - "$OUTFILE" 
     ;;
 
   pdfposter )
