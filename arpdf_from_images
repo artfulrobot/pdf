@@ -12,20 +12,27 @@ die('ps2pdf required. sudo apt-get install ghostscript') if system("which ps2pdf
 # See http://perldoc.perl.org/Getopt/Long.html
 # can set default options like this:
 my %opts = (
-		'bw'        => 0,      
-		'threshold' => '80%',  
+		'bw'        => 0,
+    'indexed'   => 0,
+    'levels'    => '10%,90%',
+		'threshold' => '80%',
 		'help'      => 0,
 		'quality'   => 'default',
 		'outfile'   => ''
 		);
 
-GetOptions (\%opts, 'bw!','threshold=s','help','quality=s' );
+GetOptions (\%opts, 'bw!','threshold=s','help','quality=s','indexed=s', 'levels=s');
 pod2usage(1) if ($opts{'help'});
 
 # validate options and throw help back if the dear user has clearly misunderstood
 
 # expect at least two files
 pod2usage(1) if ( $#ARGV <1 );
+
+unless ($opts{levels} =~ m/^(\d+%,\d+%|none)$/i) {
+  print STDERR "-levels must be in a%,b% format or 'none'.\n";
+  pod2usage(1);
+}
 
 # first thing is outfile
 $opts{'outfile'} = shift @ARGV ;
@@ -59,6 +66,29 @@ if ($opts{bw})
 	}
 	print "done\n";
 }
+if ($opts{indexed} gt 0)
+{
+	print "Converting to $opts{indexed} colour pallette bit pngs with convert...\n";
+
+	foreach (@inputs)
+	{
+		print "$_ ... ";
+    my @cmd = ("convert",
+			$_,
+      '-background','white',
+      '-flatten');
+    push @cmd, '-level', $opts{levels} unless ($opts{levels} =~ m/^(none|0%,100%)$/);
+    push @cmd,'-dither', 'None',
+      '-colors', $opts{indexed},
+			'_' . $_ . '.png';
+
+		system @cmd;
+
+		# prepend _ and append .png to filename in @inputs
+		s/^(.+)$/_$1.png/;
+	}
+	print "done\n";
+}
 
 
 print "Generating optimised postscript, then pdf with sam2p...\n";
@@ -83,7 +113,7 @@ print "done\n";
 # tidy up
 unlink $_ . '.pdf' foreach (@inputs);
 unlink $_ . '.ps' foreach (@inputs);
-unlink (@inputs) if ($opts{bw});
+unlink (@inputs) if ($opts{bw} || $opts{indexed} gt 0);
 
 system('ls', '-lh', $opts{outfile} );
 
@@ -114,6 +144,15 @@ Convert the images to one-bit black and white. e.g. for scanned text documents.
 
 In conjunction with -bw, threshold for conversion. Defaults to 50%. 
 80% would be darker.
+
+=item B<-indexed> N
+
+Reduce colours, e.g. -indexed 8. Useful for colour text documents.
+
+=item B<-levels> b%,w%
+
+Apply levels. Default is 10%,90% which helps make scans of text documents with
+black text and white paper. 0%,100% or 'none' to disable.
 
 =back
 
