@@ -59,6 +59,7 @@ if ($opts{bw})
 			$_,
 			'-threshold',$opts{threshold},
 			'-monochrome',
+      '-flatten',
 			'_' . $_ . '.png') ;
 
 		# prepend _ and append .png to filename in @inputs

@@ -5,10 +5,13 @@ function usage {
   echo "Usage: $0 [-h] [-s size] in.pdf out.pdf";
   echo ""
   echo "Scales the PDF's paper size to given size, default A5 (portrait)";
+  echo "Papersizes: see http://pages.cs.wisc.edu/~ghost/doc/AFPL/8.00/Use.htm#Known_paper_sizes"
   echo ""
   echo "e.g. you designed something on A4 and want to use it as"
   echo "an A5 flyer"
   echo "$0 poster-a4.pdf flyer-a5.pdf"
+  echo ""
+  echo "$0 -s a4 poster-a4.pdf flyer-a5.pdf"
   echo ""
   exit $1;
 }
