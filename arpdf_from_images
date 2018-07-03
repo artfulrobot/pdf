@@ -1,165 +1,113 @@
-#!/usr/bin/perl -w
-use strict;
-use Getopt::Long;
-use Pod::Usage;
-use Data::Dumper; 
+#!/usr/bin/env python3
+# coding:utf-8
+import sys
+import os
+import argparse
+import subprocess
 
-die('sam2p required. sudo apt-get install sam2p') if system("which sam2p >/dev/null");
-die('convert required. sudo apt-get install imagemagick') if system("which convert >/dev/null");
-die('pdftk required. sudo apt-get install pdftk') if system("which pdftk >/dev/null");
-die('ps2pdf required. sudo apt-get install ghostscript') if system("which ps2pdf >/dev/null");
+class Crush:
 
-# See http://perldoc.perl.org/Getopt/Long.html
-# can set default options like this:
-my %opts = (
-		'bw'        => 0,
-    'indexed'   => 0,
-    'levels'    => '10%,90%',
-		'threshold' => '80%',
-		'help'      => 0,
-		'quality'   => 'default',
-		'outfile'   => ''
-		);
+    def __init__(self, args):
+        self.args = args;
 
-GetOptions (\%opts, 'bw!','threshold=s','help','quality=s','indexed=s', 'levels=s');
-pod2usage(1) if ($opts{'help'});
+    def crush(self):
+        # First convert each input file into a crushed png.
+        files = [];
+        colours = self.args["colours"]
+        input_size = 0
+        for i in range(len(self.args["input"])):
+            files.append(self.compress_image(i))
+            input_size += os.path.getsize(self.args['input'][i])
 
-# validate options and throw help back if the dear user has clearly misunderstood
+        cmd = ['img2pdf', '--output', self.args['output']];
+        cmd.extend(files)
+        subprocess.check_output(cmd, stderr=subprocess.STDOUT)
+        for f in files:
+            os.unlink(f)
 
-# expect at least two files
-pod2usage(1) if ( $#ARGV <1 );
+        outsize = os.path.getsize(self.args['output'])
+        print('{}\t{:,.1f}kB ({:.1f}%)'.format(
+            self.args['output'],
+            outsize/1024,
+            outsize*100/input_size
+            ))
 
-unless ($opts{levels} =~ m/^(\d+%,\d+%|none)$/i) {
-  print STDERR "-levels must be in a%,b% format or 'none'.\n";
-  pod2usage(1);
-}
+        return
 
-# first thing is outfile
-$opts{'outfile'} = shift @ARGV ;
+    def compress_image(self, i):
+        colours = self.args["colours"];
 
-# outfile must end .pdf
-die("Outfile must end .pdf\n") unless ( $opts{'outfile'} =~ m/.pdf$/ ) ;
+        infile = self.args['input'][i]
 
-# outfile must not exist
-die("$opts{outfile} exists. I won't overwrite it.\n") if ( -e $opts{'outfile'} ) ;
+        # Default to png.
+        method = 'png'
+        if colours == 2:
+            extra_options = [ '-threshold', '50%' ]
+        elif colours > 2 and colours < 256:
+            extra_options = [ '-colors', str(colours) ]
+        else:
+            extra_options = [ '-gaussian-blur', '0.05', '-quality', '10' ]
+            method = 'jpg'
 
-# collect input files, check they exist.
-my (@inputs) = @ARGV;
-foreach (@inputs)
-{ die( "$_ does not exist\n" ) if ( ! -e $_ ); }
+        cmd = [
+            'convert',
+            infile,
+            '-background', 'white',
+            '-flatten',
+            '-strip',
+            '-level',  '10%,90%',
+            ]
+        cmd.extend(extra_options)
+        outfile = '.image-crush-{}.{}'.format(i, method)
+        cmd.append(outfile)
 
-# create 1-bit versions if needed
-if ($opts{bw})
-{
-	print "Converting to 1 bit pngs with convert...\n";
-	foreach (@inputs)
-	{
-		print "$_ ... ";
-		system("convert",
-			$_,
-			'-threshold',$opts{threshold},
-			'-monochrome',
-      '-flatten',
-			'_' . $_ . '.png') ;
+        subprocess.check_output(cmd)
+        return outfile
 
-		# prepend _ and append .png to filename in @inputs
-		s/^(.+)$/_$1.png/;
-	}
-	print "done\n";
-}
-if ($opts{indexed} gt 0)
-{
-	print "Converting to $opts{indexed} colour pallette bit pngs with convert...\n";
+    def compare(self):
+        try:
+            output = subprocess.check_output(['compare', '-metric', 'MAE', self.args["input"], self.args["output"], 'null:-'], stderr=subprocess.STDOUT).decode('utf-8')
+        except subprocess.CalledProcessError as e:
+            output = e.output.decode('utf-8')
 
-	foreach (@inputs)
-	{
-		print "$_ ... ";
-    my @cmd = ("convert",
-			$_,
-      '-background','white',
-      '-flatten');
-    push @cmd, '-level', $opts{levels} unless ($opts{levels} =~ m/^(none|0%,100%)$/);
-    push @cmd,'-dither', 'None',
-      '-colors', $opts{indexed},
-			'_' . $_ . '.png';
-
-		system @cmd;
-
-		# prepend _ and append .png to filename in @inputs
-		s/^(.+)$/_$1.png/;
-	}
-	print "done\n";
-}
+        new_filesize = os.path.getsize(self.args["output"]);
+        split = output.split(' ')
+        return {
+            "orig_filesize": self.orig_filesize/1024,
+            "filesize": new_filesize/1024,
+            "size_ratio": self.orig_filesize/new_filesize,
+            "quality_abs": float(split[0]),
+            "quality_percent": float(split[1].strip('()')),
+            "quality_ratio": 100 * float(split[1].strip('()')),
+            }
 
 
-print "Generating optimised postscript, then pdf with sam2p...\n";
-foreach (@inputs)
-{
-	print "Doing $_ ..."; 
-	system("sam2p",'-j:quiet',
-		'-e:dpi:300',
-		'-e:scale', 
-		$_, $_ . '.ps') ;
-	print "...";
-	system("ps2pdf14", '-sPAPERSIZE=a4', "-dPDFSETTINGS=/$opts{quality}", $_ . '.ps', $_ . '.pdf');
-	print "done\n";
-}
+if __name__ == '__main__':
+    # Parsing command line args:
+    # https://docs.python.org/3.4/library/argparse.html#the-add-argument-method
+    parser = argparse.ArgumentParser(description="Brutally compress scanned images into a PDF.")
+    # any arg beginning - or -- is optional and can come anywhere. (but make it required by passing required=1)
+    # any arg without an action expects one argument to follow
+    # default sets initial value (otherwise None)
+    # short option is optional
+    # parser.add_argument('-o', '--optional', action='store_true')
+    # parser.add_argument('-v', '--verbose', action='count', help="verbositiy - use multiple times to increase", default=0)
+    # parser.add_argument('-n', '--name', help="Provide an argument")
+    parser.add_argument('-c', '--colours', help="2 for black and white, 3 - 255 for indexed (usually expensive), 0 for full.", default=2, type=int)
+    # example of positional, required params
+    # type sets parse type
+    # nargs:
+    # 4 require 4 args
+    # ? take optional 1 arg. Without arg 'default' is used.
+    #   optional args only: With option but no arg 'const' is used.
+    # * none or more args follow
+    # + one or more args follow
+    #parser.add_argument('message', help="something to say", type=str, nargs='+')
+    parser.add_argument('output', help="output file (PDF)", type=str)
+    parser.add_argument('input', help="input file(s)", type=str, nargs='+')
 
-print "Combining PDF pages...";
-my @cmd = qw|pdftk|;
-push @cmd, $_ . '.pdf' foreach(@inputs);
-system(@cmd,'cat','output', $opts{outfile});
-print "done\n";
+    args = vars(parser.parse_args())
+    print(args)
 
-# tidy up
-unlink $_ . '.pdf' foreach (@inputs);
-unlink $_ . '.ps' foreach (@inputs);
-unlink (@inputs) if ($opts{bw} || $opts{indexed} gt 0);
-
-system('ls', '-lh', $opts{outfile} );
-
-
-__END__
-
-=head1 NAME
-
-arpdf_from_images
-
-=head1 SYNOPSIS
-
-arpdf_from_images [options] outfile.pdf infile.jpg [infile.jpg ... ]
-
-=head1 OPTIONS
-
-=over 8
-
-=item B<-quality> default|prepress|printer|ebook|screen
-
-PDF setting.
-
-=item B<-bw>
-
-Convert the images to one-bit black and white. e.g. for scanned text documents.
-
-=item B<-threshold>
-
-In conjunction with -bw, threshold for conversion. Defaults to 50%. 
-80% would be darker.
-
-=item B<-indexed> N
-
-Reduce colours, e.g. -indexed 8. Useful for colour text documents.
-
-=item B<-levels> b%,w%
-
-Apply levels. Default is 10%,90% which helps make scans of text documents with
-black text and white paper. 0%,100% or 'none' to disable.
-
-=back
-
-=head1 DESCRIPTION
-
-Creates A4 PDF from one or more raster image inputs maximising each image on each page.
-
-=cut
-
+    crush = Crush(args)
+    crush.crush()
