@@ -9,6 +9,7 @@ function usage {
   tell_cyan "Usage: $0 [-h] output.pdf https://example.com";
   tell_cyan ""
   tell_cyan "  -h  Display this message"
+  tell_cyan "  -n  Do not open the pdf"
   tell_cyan ""
   exit $1;
 }
@@ -57,11 +58,12 @@ function tell_col {
 
 other_args=();
 # Default options go here:
-name="Nobody"
+open_file=yes
 # an option followed by : means "takes an argument", set in $OPTARG
-while getopts "h" opt; do
+while getopts "hn" opt; do
   case $opt in
     h )   usage 0 ;;
+    n )   open_file=no ;;
     \? )  usage 1 ;;
   esac
 done
@@ -78,7 +80,12 @@ url="$2"
 [[ "$url" =~ ^https?\:// ]] || usage 1 "Expected url to start with http..."
 if chromium-browser --headless --print-to-pdf="$output_file" "$url" &>/dev/null
 then
-  ls -lh "$output_file"
+  if [[ "$open_file" == 'yes' ]]
+  then
+    xdg-open "$output_file"
+  else
+    ls -lh "$output_file"
+  fi
 else
   echo "Failed"
   exit 1
