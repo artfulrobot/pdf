@@ -1,0 +1,85 @@
+#!/bin/bash
+#example parsing of command lines
+
+function usage {
+  if [ -n "$2" ]
+  then
+    tell_red "$2" >&2
+  fi
+  tell_cyan "Usage: $0 [-h] output.pdf https://example.com";
+  tell_cyan ""
+  tell_cyan "  -h  Display this message"
+  tell_cyan ""
+  exit $1;
+}
+
+#
+# Synopsis:
+#
+#    name=$(ask "what is your name?")
+#    age=$(ask "what is your age?" "ancient")
+#    ask "Continue?" Y Y || { echo "ok, stopping"; exit 1; }
+#
+function ask {
+  tell_cyan -n "?? $1" >&2
+  if [[ -n "$2" ]]
+  then
+    tell_white -n " [$2]" >&2
+  fi
+  tell_cyan -n ": " >&2
+
+  read r
+  if [[ -z "$r" ]]
+  then
+    r="$2"
+  fi
+
+  if [[ -n "$3" ]]
+  then
+    [[ "$3" == "$r" ]] && return 0 || return 1
+  fi
+
+  echo "$r"
+}
+function tell_red     { tell_col 31 "$@"; }
+function tell_green   { tell_col 32 "$@"; }
+function tell_yellow  { tell_col 33 "$@"; }
+function tell_blue    { tell_col 34 "$@"; }
+function tell_magenta { tell_col 35 "$@"; }
+function tell_cyan    { tell_col 36 "$@"; }
+function tell_white   { tell_col 37 "$@"; }
+function tell_col {
+  echo -e -n "\033[${1}m"
+  shift
+  echo "$@"
+  echo -e -n "\033[m"
+}
+
+other_args=();
+# Default options go here:
+name="Nobody"
+# an option followed by : means "takes an argument", set in $OPTARG
+while getopts "h" opt; do
+  case $opt in
+    h )   usage 0 ;;
+    \? )  usage 1 ;;
+  esac
+done
+# Now remove all options (and their args) from the positional parameters
+# So we can process any additional non-option args, which MUST come after
+# options.
+shift $((OPTIND-1))
+
+output_file="$1"
+url="$2"
+[[ ! -z "$output_file" ]] || usage 1 "Output file missing"
+[[ ! -z "$url" ]] || usage 1 "url missing"
+[[ "$output_file" =~ \.pdf$ ]] || usage 1 "Expected output file to end in .pdf"
+[[ "$url" =~ ^https?\:// ]] || usage 1 "Expected url to start with http..."
+if chromium-browser --headless --print-to-pdf="$output_file" "$url" &>/dev/null
+then
+  ls -lh "$output_file"
+else
+  echo "Failed"
+  exit 1
+fi

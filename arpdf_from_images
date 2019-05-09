@@ -9,9 +9,15 @@ class Crush:
 
     def __init__(self, args):
         self.args = args;
+        # calculate output file.
+        if not self.args['output']:
+            d = os.path.dirname(os.path.realpath(self.args['input'][0])).split('/')[-1]
+            self.output = '../{}.pdf'.format(d);
+        else:
+            self.output = self.args['output']
+
 
     def crush(self):
-        # First convert each input file into a crushed png.
         files = [];
         colours = self.args["colours"]
         input_size = 0
@@ -19,15 +25,15 @@ class Crush:
             files.append(self.compress_image(i))
             input_size += os.path.getsize(self.args['input'][i])
 
-        cmd = ['img2pdf', '--output', self.args['output']];
+        cmd = ['img2pdf', '--output', self.output];
         cmd.extend(files)
         subprocess.check_output(cmd, stderr=subprocess.STDOUT)
         for f in files:
             os.unlink(f)
 
-        outsize = os.path.getsize(self.args['output'])
+        outsize = os.path.getsize(self.output)
         print('{}\t{:,.1f}kB ({:.1f}%)'.format(
-            self.args['output'],
+            self.output,
             outsize/1024,
             outsize*100/input_size
             ))
@@ -42,11 +48,13 @@ class Crush:
         # Default to png.
         method = 'png'
         if colours == 2:
-            extra_options = [ '-threshold', '50%' ]
+            extra_options = [ '+dither', '-colors',  '2',  '-colorspace', 'gray',  '-normalize' ]
+            # extra_options = [ '-threshold', '50%' ]
         elif colours > 2 and colours < 256:
-            extra_options = [ '-colors', str(colours) ]
+            extra_options = [ '+dither', '-colors',  str(colours), '-normalize' ]
+            # extra_options = [ '-colors', str(colours) ]
         else:
-            extra_options = [ '-gaussian-blur', '0.05', '-quality', '10' ]
+            extra_options = [ '-gaussian-blur', '0.05', '-quality', self.args['quality'] ]
             method = 'jpg'
 
         cmd = [
@@ -93,7 +101,6 @@ if __name__ == '__main__':
     # parser.add_argument('-o', '--optional', action='store_true')
     # parser.add_argument('-v', '--verbose', action='count', help="verbositiy - use multiple times to increase", default=0)
     # parser.add_argument('-n', '--name', help="Provide an argument")
-    parser.add_argument('-c', '--colours', help="2 for black and white, 3 - 255 for indexed (usually expensive), 0 for full.", default=2, type=int)
     # example of positional, required params
     # type sets parse type
     # nargs:
@@ -103,11 +110,12 @@ if __name__ == '__main__':
     # * none or more args follow
     # + one or more args follow
     #parser.add_argument('message', help="something to say", type=str, nargs='+')
-    parser.add_argument('output', help="output file (PDF)", type=str)
+    parser.add_argument('-c', '--colours', help="2 for black and white (default), 3 - 255 for indexed (usually expensive), 0 for full.", default=2, type=int)
+    parser.add_argument('-o', '--output', help="output file (PDF). If not given, the directory name of the first file will be used.", type=str)
+    parser.add_argument('-q', '--quality', help="JPEG quality (defaults to 10). Use -c 0 for jpeg output.", type=str, default='10')
     parser.add_argument('input', help="input file(s)", type=str, nargs='+')
 
     args = vars(parser.parse_args())
-    print(args)
 
     crush = Crush(args)
     crush.crush()
