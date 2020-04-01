@@ -1,0 +1,88 @@
+#!/bin/bash
+function usage {
+  if [ -n "$2" ]
+  then
+    echo "$2" >&2
+  fi
+  echo "Appends pages from another PDF"
+  echo ""
+  echo "Usage: $0 [-h] main.pdf other.pdf [other-2.pdf ...]";
+  echo ""
+  echo "  -h  Display this message"
+  echo "  -d  Delete other pdfs(\!)"
+  echo "  -n  Don't open after"
+  echo ""
+  exit $1;
+}
+
+other_args=();
+# an option followed by : means "takes an argument", set in $OPTARG
+dont_open=0
+delete_after=0
+while getopts "hdn" opt; do
+  case $opt in
+    d )   delete_after=1 ;;
+    h )   usage 0 ;;
+    n )   dont_open=1 ;;
+    \? )  usage 1 ;;
+  esac
+done
+# Now remove all options (and their args) from the positional parameters
+# So we can process any additional non-option args, which MUST come after
+# options.
+shift $((OPTIND-1))
+
+[[ -z "$1" ]] && usage 1
+
+all_good=1
+
+for arg in "$@"
+do
+  if [[ ! -e "$arg" ]] || [[ ! -r "$arg" ]]
+  then
+    echo "File not found (or not readable): $arg" >&2
+    all_good=0
+  elif [[ "${arg##*.}" != 'pdf' ]]
+  then
+    echo "File not .pdf: $arg" >&2
+    all_good=0
+  fi
+done
+if [[ ! -w "$1" ]]
+then
+  echo "First file must be writable: $1" >&2
+  all_good=0
+fi
+
+if ! which pdftk >/dev/null 2>&1
+then
+  echo "pdftk required." >&2
+  all_good=0
+fi
+
+[[ $all_good == 1 ]] || usage 1
+
+# do the work.
+outpdf=$(tempfile -s .pdf)
+echo "Running: " pdftk "$@" cat output "$outpdf"
+if pdftk "$@" cat output "$outpdf"
+then
+  mv "$outpdf" "$1" && echo "✔ wrote: $1"
+else
+  echo "✖ pdftk failed; original file left as was." >&2
+  exit 1
+fi
+
+orig="$1"
+shift
+[[ $dont_open == 0 ]] && xdg-open "$orig" 2>/dev/null
+
+if [[ $delete_after == 1 ]]
+then
+  if [[ -z $(which gio) ]]
+  then
+    rm "$@"
+  else
+    gio trash "$@"
+  fi
+fi
