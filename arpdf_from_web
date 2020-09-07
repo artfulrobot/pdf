@@ -78,15 +78,33 @@ url="$2"
 [[ ! -z "$url" ]] || usage 1 "url missing"
 [[ "$output_file" =~ \.pdf$ ]] || usage 1 "Expected output file to end in .pdf"
 [[ "$url" =~ ^https?\:// ]] || usage 1 "Expected url to start with http..."
-if chromium-browser --headless --print-to-pdf="$output_file" "$url" &>/dev/null
-then
-  if [[ "$open_file" == 'yes' ]]
+
+tryBrowser() {
+  browser="$1"
+  [[ -z "$1" ]] && return
+  browser=$(command -v "$browser")
+  [[ -z "$1" ]] && return
+
+  echo "Trying $browser..." >&2
+
+  if $browser --headless --print-to-pdf="$output_file" "$url" &>/dev/null
   then
-    xdg-open "$output_file"
-  else
-    ls -lh "$output_file"
+    if [[ "$open_file" == 'yes' ]]
+    then
+      xdg-open "$output_file" &>/dev/null
+    else
+      ls -lh "$output_file"
+    fi
+    # success
+    exit 0
   fi
-else
-  echo "Failed"
-  exit 1
-fi
+  # error
+}
+
+
+# Try one of these until one works...
+tryBrowser chromium-browser
+tryBrowser $(find /snap/chromium/current/ -name chrome)
+tryBrowser google-chrome
+echo "Sorry, failed to find a working browser\!" >&2
+exit 1
