@@ -65,7 +65,7 @@ fi
 [[ $all_good == 1 ]] || usage 1
 
 # do the work.
-outpdf=$(tempfile -s .pdf)
+TEMP=`mktemp /tmp/arpdf_append_pages.XXXX.pdf`
 echo "Running: " pdftk "$@" cat output "$outpdf"
 if pdftk "$@" cat output "$outpdf"
 then

@@ -3,7 +3,7 @@
 
 files=( "$@" )
 LOGFILE=pdf_via_unoconv.log
-TEMP=`tempfile`
+TEMP=`mktemp /tmp/arpdf_from_documents.XXXX`
 
 if [ "$#" -eq "0" ]
 then
